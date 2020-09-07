@@ -41,7 +41,7 @@ class BusinessContext:
         raised.
 
         Args:
-            other_vasp_info (LibraAddress): The address of the other VASP.
+            other_vasp_info (LibraAddress): The Libra Blockchain address of the other VASP.
 
         Raises:
             BusinessNotAuthorized: If the current VASP is not authorised
@@ -187,7 +187,7 @@ class BusinessContext:
         or this VASP (see `command.origin` to determine this).
 
         Args:
-            other_address (str): the encoded libra address of the other VASP.
+            other_address (str): the encoded Libra Blockchain address of the other VASP.
             seq (int): the sequence number into the shared command sequence.
             command (ProtocolCommand): the command that lead to the new or
                 updated payment.
@@ -257,7 +257,7 @@ class VASPInfo:
             VASP.
 
             Args:
-                other_addr (LibraAddress): The address of the other VASP.
+                other_addr (LibraAddress): The Libra Blockchain address of the other VASP.
 
             Returns:
                 str: The base url of the other VASP.
@@ -267,21 +267,21 @@ class VASPInfo:
     # --- The functions below are currently unused ---
 
     def get_libra_address(self):
-        """ The settlement Libra address for this channel.
+        """ The settlement Libra Blockchain address for this channel.
 
             Returns:
-                LibraAddress: The Libra address.
+                LibraAddress: The Libra Blockchain address.
 
         """
         raise NotImplementedError()  # pragma: no cover
 
     def get_parent_address(self):
         """ The VASP Parent address for this channel. High level logic is common
-        to all Libra addresses under a parent to ensure consistency and
+        to all Libra Blockchain addresses under a parent to ensure consistency and
         compliance.
 
         Returns:
-            LibraAddress: The Libra address of the parent VASP.
+            LibraAddress: The Libra Blockchain address of the parent VASP.
 
         """
         raise NotImplementedError()  # pragma: no cover
@@ -290,7 +290,7 @@ class VASPInfo:
         """ Returns True if the other party is an unhosted wallet.
 
             Args:
-                other_addr (LibraAddress): The address of the other VASP.
+                other_addr (LibraAddress): The Libra Blockchain address of the other VASP.
 
             Returns:
                 bool: Whether the other VASP is an unhosted wallet.
@@ -302,7 +302,7 @@ class VASPInfo:
         """ Returns the compliance verfication key of the other VASP.
 
         Args:
-            other_addr (LibraAddress): The address of the other VASP.
+            other_addr (LibraAddress): The Libra Blockchain address of the other VASP.
 
         Returns:
             ComplianceKey: The compliance verification key of the other VASP.
@@ -313,7 +313,7 @@ class VASPInfo:
         """ Returns the compliance signature (secret) key of the VASP.
 
         Args:
-            my_addr (LibraAddress): The Libra address of the VASP.
+            my_addr (LibraAddress): The Libra Blockchain address of the VASP.
 
         Returns:
             ComplianceKey: The compliance key of the VASP.

@@ -1,13 +1,13 @@
 # off-chain-reference
 [![License](https://img.shields.io/badge/license-Apache-green.svg)](LICENSE)
 
-Off-Chain Reference: Supports defining payments, exchanging KYC data and attestation of KYC data between VASPs.
+Off-Chain Reference: Provide a reference implementation for defining payments, exchanging KYC data and attestation of KYC data between VASPs.
 
 ## Installation
 
 To install the API, activate the Python virtual environment you use, and then execute:
 
-    git clone https://github.com/novifinancial/off-chain-api.git
+    git clone https://github.com/libra/off-chain-reference.git
     cd off-chain-api
     pip install .
 
@@ -35,4 +35,4 @@ The specifications and code are shared here to support discussions within the Li
 
 ## License
 
-Off-Chain API is licensed as [Apache 2.0](https://github.com/novifinancial/off-chain-api/blob/master/LICENSE).
+Off-Chain API is licensed as [Apache 2.0](https://github.com/libra/off-chain-reference/blob/master/LICENSE).

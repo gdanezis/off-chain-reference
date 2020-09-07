@@ -73,8 +73,13 @@ async def test_handle_request(url, net_handler, key, client, signed_json_request
 
 async def test_handle_request_not_authorised(vasp, url, json_request, client):
     vasp.business_context.open_channel_to.side_effect = BusinessNotAuthorized
+<<<<<<< HEAD
     headers = {'X-Request-ID' : 'abc'}
     response = await client.post(url, data=json_request, headers=headers)
+=======
+    headers = {'X-Request-ID': 'abc'}
+    response = await client.post(url, json=json_request, headers=headers)
+>>>>>>> master
     assert response.status == 401
 
 async def test_handle_request_bad_payload(client, url):
@@ -101,12 +106,6 @@ async def test_send_command(net_handler, tester_addr, server, command):
     await net_handler.close()
     assert ret
 
-
-async def test_close_watchdog(net_handler, loop):
-    net_handler.schedule_watchdog(loop, period=0.1)
-    import asyncio
-    await asyncio.sleep(0.4, loop=loop)
-    await net_handler.close()
 
 async def test_watchdog_task(net_handler, tester_addr, server, command):
     # Ensure there is a request to re-transmit.

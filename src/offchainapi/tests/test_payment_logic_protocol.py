@@ -1,7 +1,6 @@
 # Copyright (c) The Libra Core Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-
 from ..asyncnet import Aionet
 from ..storage import StorableFactory
 from ..libra_address import LibraAddress
