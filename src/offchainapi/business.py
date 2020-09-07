@@ -35,32 +35,13 @@ class BusinessForceAbort(Exception):
 class BusinessContext:
     """ The interface a VASP should define to drive the Off-chain protocol. """
 
-    async def notify_payment_update(self, other_address, seq, command, payment):
-        """ An async method to notify the VASP that a successsful command has
-        been sequenced resulting in a new or updated payment. This provides the
-        VASP with full visibility into the sequence of payments. The command
-        could have originated either from the other VASP or this VASP (see
-        `command.origin` to determine this).
-
-        Args:
-            other_address (str): the encoded libra address of the other VASP.
-            seq (int): the sequence number into the shared command sequence.
-            command (ProtocolCommand): the command that lead to the new or
-            updated payment.
-            payment (PaymentObject): the payment resulting from this command.
-
-        Returns None or a context objext that will be passed on the
-        other business context functions.
-        """
-        pass
-
     def open_channel_to(self, other_vasp_addr):
         """Requests authorization to open a channel to another VASP.
         If it is authorized nothing is returned. If not an exception is
         raised.
 
         Args:
-            other_vasp_info (LibraAddress): The address of the other VASP.
+            other_vasp_info (LibraAddress): The Libra Blockchain address of the other VASP.
 
         Raises:
             BusinessNotAuthorized: If the current VASP is not authorised
@@ -75,6 +56,7 @@ class BusinessContext:
 
         Args:
             payment (PaymentCommand): The concerned payment.
+            ctx (Any): Optional context object that business can store custom data
 
         Returns:
             bool: Whether the VASP is the sender of the payment.
@@ -86,6 +68,7 @@ class BusinessContext:
 
         Args:
             payment (PaymentCommand): The concerned payment.
+            ctx (Any): Optional context object that business can store custom data
 
         Returns:
             bool: Whether the VASP is the recipient of the payment.
@@ -100,6 +83,7 @@ class BusinessContext:
         Args:
             payment (PaymentCommand): The payment command containing the actors
                 to check.
+            ctx (Any): Optional context object that business can store custom data
 
         Raises:
             BusinessValidationFailure: If the account does not exist.
@@ -116,6 +100,7 @@ class BusinessContext:
         Args:
             payment (PaymentCommand): The payment command containing the
                 signature to check.
+            ctx (Any): Optional context object that business can store custom data
 
         Raises:
             BusinessValidationFailure: If the signature is invalid
@@ -128,6 +113,7 @@ class BusinessContext:
 
         Args:
             payment (PaymentCommand): The payment to sign.
+            ctx (Any): Optional context object that business can store custom data
         """
         raise NotImplementedError()  # pragma: no cover
 
@@ -139,6 +125,7 @@ class BusinessContext:
 
             Args:
                 payment (PaymentCommand): The concerned payment.
+                ctx (Any): Optional context object that business can store custom data
 
             Returns:
                 Status: A set of status indicating to level of kyc to provide,
@@ -159,6 +146,7 @@ class BusinessContext:
 
             Args:
                 payment (PaymentCommand): The concerned payment.
+                ctx (Any): Optional context object that business can store custom data
 
             Returns:
                 Status: Returns Status.none or the current status
@@ -178,6 +166,7 @@ class BusinessContext:
 
             Args:
                 payment (PaymentCommand): The concerned payment.
+                ctx (Any): Optional context object that business can store custom data
 
             Raises:
                    BusinessNotAuthorized: If the other VASP is not authorized to
@@ -189,7 +178,36 @@ class BusinessContext:
         '''
         raise NotImplementedError()  # pragma: no cover
 
-# ----- Settlement -----
+# ----- Payment Processing -----
+    async def payment_pre_processing(self, other_address, seq, command, payment):
+        ''' An async method to let VASP perform custom business logic to a
+        successsful (sequenced & ACKed) command prior to normal processing.
+        For example it can be used to check whether the payment is in terminal
+        status. The command could have originated either from the other VASP
+        or this VASP (see `command.origin` to determine this).
+
+        Args:
+            other_address (str): the encoded Libra Blockchain address of the other VASP.
+            seq (int): the sequence number into the shared command sequence.
+            command (ProtocolCommand): the command that lead to the new or
+                updated payment.
+            payment (PaymentObject): the payment resulting from this command.
+
+        Returns None or a context objext that will be passed on the
+        other business context functions.
+        '''
+        pass
+
+    async def payment_initial_processing(self, payment, ctx=None):
+        '''
+        Allow business to do custom pre-processing to a payment
+        Args:
+            payment (PaymentObject): The concerned payment.
+            ctx (Any): Optional context object that business can store custom data
+        Raises:
+            BusinessForceAbort: When business wants to abort a payment
+        '''
+        pass
 
     async def ready_for_settlement(self, payment, ctx=None):
         ''' Indicates whether a payment is ready for settlement as far as this
@@ -239,7 +257,7 @@ class VASPInfo:
             VASP.
 
             Args:
-                other_addr (LibraAddress): The address of the other VASP.
+                other_addr (LibraAddress): The Libra Blockchain address of the other VASP.
 
             Returns:
                 str: The base url of the other VASP.
@@ -249,21 +267,21 @@ class VASPInfo:
     # --- The functions below are currently unused ---
 
     def get_libra_address(self):
-        """ The settlement Libra address for this channel.
+        """ The settlement Libra Blockchain address for this channel.
 
             Returns:
-                LibraAddress: The Libra address.
+                LibraAddress: The Libra Blockchain address.
 
         """
         raise NotImplementedError()  # pragma: no cover
 
     def get_parent_address(self):
         """ The VASP Parent address for this channel. High level logic is common
-        to all Libra addresses under a parent to ensure consistency and
+        to all Libra Blockchain addresses under a parent to ensure consistency and
         compliance.
 
         Returns:
-            LibraAddress: The Libra address of the parent VASP.
+            LibraAddress: The Libra Blockchain address of the parent VASP.
 
         """
         raise NotImplementedError()  # pragma: no cover
@@ -272,7 +290,7 @@ class VASPInfo:
         """ Returns True if the other party is an unhosted wallet.
 
             Args:
-                other_addr (LibraAddress): The address of the other VASP.
+                other_addr (LibraAddress): The Libra Blockchain address of the other VASP.
 
             Returns:
                 bool: Whether the other VASP is an unhosted wallet.
@@ -284,7 +302,7 @@ class VASPInfo:
         """ Returns the compliance verfication key of the other VASP.
 
         Args:
-            other_addr (LibraAddress): The address of the other VASP.
+            other_addr (LibraAddress): The Libra Blockchain address of the other VASP.
 
         Returns:
             ComplianceKey: The compliance verification key of the other VASP.
@@ -295,7 +313,7 @@ class VASPInfo:
         """ Returns the compliance signature (secret) key of the VASP.
 
         Args:
-            my_addr (LibraAddress): The Libra address of the VASP.
+            my_addr (LibraAddress): The Libra Blockchain address of the VASP.
 
         Returns:
             ComplianceKey: The compliance key of the VASP.

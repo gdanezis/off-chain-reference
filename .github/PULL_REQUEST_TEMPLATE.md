@@ -16,4 +16,4 @@ Thank you for sending a PR. We appreciate you spending time to help improve the 
 
 ## Related PRs
 
-(If this PR adds or changes functionality, please take some time to update the docs at https://github.com/libra/off-chain-api, and link to your PR here.)
+(If this PR adds or changes functionality, please take some time to update the docs at https://github.com/libra/off-chain-reference, and link to your PR here.)
