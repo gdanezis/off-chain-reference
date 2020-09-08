@@ -4,8 +4,6 @@
 # The main storage interface.
 
 import json
-from threading import RLock
-
 from .utils import JSONFlag, JSONSerializable, get_unique_string
 
 
@@ -61,7 +59,6 @@ class StorableFactory:
     '''
 
     def __init__(self, db):
-        self.rlock = RLock()
         self.db = db
         self.current_transaction = None
         self.levels = 0
@@ -231,20 +228,17 @@ class StorableFactory:
         return self
 
     def __enter__(self):
-        self.rlock.acquire()
         if self.levels == 0:
             self.current_transaction = get_unique_string()
 
         self.levels += 1
 
     def __exit__(self, type, value, traceback):
-        try:
-            self.levels -= 1
-            if self.levels == 0:
-                self.current_transaction = None
-                self.persist_cache()
-        finally:
-            self.rlock.release()
+        self.levels -= 1
+        if self.levels == 0:
+            self.current_transaction = None
+            self.persist_cache()
+
 
 
 class StorableDict(Storable):

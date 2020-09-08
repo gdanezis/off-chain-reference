@@ -13,7 +13,6 @@ from .crypto import OffChainInvalidSignature
 
 import json
 from collections import namedtuple
-from threading import RLock
 import logging
 from itertools import islice
 
@@ -145,9 +144,6 @@ class VASPPairChannel:
                 self.myself.as_str(),
                 self.other_address_str
             )
-
-        # A reentrant lock to manage access.
-        self.rlock = RLock()
 
         # State that is persisted.
 
@@ -362,8 +358,8 @@ class VASPPairChannel:
             raise DependencyException('Dependencies locked.')
 
         # Ensure all storage operations are written atomically.
-        with self.rlock:
-            with self.storage.atomic_writes() as _:
+
+        with self.storage.atomic_writes() as _:
 
                 self.processor.check_command(
                     self.get_my_address(),
@@ -383,35 +379,39 @@ class VASPPairChannel:
         # for an asyncronous implementation.
         return request
 
-    def parse_handle_request(self, json_command):
+    def parse_request(self, body_text):
+        # Check signature
+        vasp = self.get_vasp()
+        other_key = vasp.info_context.get_peer_compliance_verification_key(
+            self.other_address_str
+        )
+        request = json.loads(other_key.verify_message(body_text))
+
+        # Parse the request whoever necessary.
+        request = CommandRequestObject.from_json_data_dict(
+            request, JSONFlag.NET
+        )
+
+        return request
+
+    def parse_handle_request(self, body_text):
         """ Handles a request provided as a json string or dict.
 
         Args:
-            json_command (str or dict): The json request.
+            body_text (str or dict): The json request.
 
         Returns:
             NetMessage: The message to be sent on a network.
         """
         try:
-            # Check signature
-            vasp = self.get_vasp()
-            other_key = vasp.info_context.get_peer_compliance_verification_key(
-                self.other_address_str
-            )
-            request = json.loads(other_key.verify_message(json_command))
+            request = self.parse_request(body_text)
 
-            # Parse the request whoever necessary.
-            request = CommandRequestObject.from_json_data_dict(
-                request, JSONFlag.NET
+            # Going ahead to process the request.
+            logger.debug(
+                f'(other:{self.other_address_str}) '
+                f'Processing request seq #{request.cid}',
             )
-
-            with self.rlock:
-                # Going ahead to process the request.
-                logger.debug(
-                    f'(other:{self.other_address_str}) '
-                    f'Processing request seq #{request.cid}',
-                )
-                response = self.handle_request(request)
+            response = self.handle_request(request)
 
         except OffChainInvalidSignature as e:
             logger.warning(
@@ -574,16 +574,7 @@ class VASPPairChannel:
                 if dv in self.object_locks and self.object_locks[dv] == request.cid:
                     self.object_locks[dv] = 'True'
 
-    def parse_handle_response(self, response_text):
-        """ Handles a response as json string or dict.
-
-        Args:
-            response_text (str): The response signed iusing JWS.
-
-        Returns:
-            bool: Whether the command was a success or not
-        """
-        try:
+    def parse_response(self, response_text):
             vasp = self.get_vasp()
             other_key = vasp.info_context.get_peer_compliance_verification_key(
                 self.other_address_str
@@ -595,8 +586,20 @@ class VASPPairChannel:
                 response, JSONFlag.NET
             )
 
-            with self.rlock:
-                result = self.handle_response(response)
+            return response
+
+    def parse_handle_response(self, response_text):
+        """ Handles a response as json string or dict.
+
+        Args:
+            response_text (str): The response signed iusing JWS.
+
+        Returns:
+            bool: Whether the command was a success or not
+        """
+        try:
+            response = self.parse_response(response_text)
+            result = self.handle_response(response)
             return result
 
         except OffChainInvalidSignature as e:

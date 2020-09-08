@@ -224,7 +224,9 @@ class Aionet:
 
                 # Check that there are no low-level HTTP errors.
                 if response.status != 200 :
-                    err_msg = f'Received status {response.status}: {response.text()}'
+                    response_text = await response.text()
+                    response = channel.parse_response(response_text)
+                    err_msg = f'Received status {response.status}: {response}'
                     raise Exception(err_msg)
 
                 response_text = await response.text()
