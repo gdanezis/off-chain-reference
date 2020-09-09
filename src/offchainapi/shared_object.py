@@ -39,7 +39,7 @@ class SharedObject(JSONSerializable):
         Returns:
             SharedObject: The new shared obeject.
         """
-        if store:
+        if store is not None and self.version in store:
             clone = store[self.version]
         else:
             clone = deepcopy(self)

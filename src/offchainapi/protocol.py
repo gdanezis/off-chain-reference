@@ -212,7 +212,7 @@ class VASPPairChannel:
             Returns:
                 int: The number of items in the sequence of successful commands.
             """
-            return len(self.command_sequence)
+            return len(list(self.command_sequence.keys()))
 
 
         def get_final_sequence(self):
@@ -722,7 +722,7 @@ class VASPPairChannel:
         """ Returns true if there are any pending re-transmits, namely
             requests for which the response has not yet been received.
         """
-        return len(self.my_request_index) > 0
+        return not self.my_request_index.is_empty()
 
     def pending_retransmit_number(self):
         '''
@@ -730,4 +730,4 @@ class VASPPairChannel:
             the number of requests that are waiting to be
             retransmitted on this channel.
         '''
-        return len(self.my_request_index)
+        return len(list(self.my_request_index.keys()))

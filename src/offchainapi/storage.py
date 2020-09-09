@@ -359,8 +359,15 @@ class StorableDict(Storable):
             yield self[k]
 
     def __len__(self):
+        raise RuntimeError('Tried to get len of storable dict.')
         xlen = self.length.get_value()
         return xlen
+
+    def is_empty(self):
+        ''' Returns True if dict is empty and False if it contains some elements.'''
+        for _ in self.keys():
+            return False
+        return True
 
     def __delitem__(self, key):
         db_key, db_key_LL = self.derive_keys(key)

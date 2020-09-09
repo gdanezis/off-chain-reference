@@ -66,13 +66,13 @@ def test_logic_protocol_process_start(payment_sender_init, loop):
     cmd = PaymentCommand(payment_sender_init)
     cmd.set_origin(other_addr)
 
-    assert len(processor.command_cache) == 0
+    assert processor.command_cache.is_empty()
 
     with store.atomic_writes():
         processor.process_command(other_addr, cmd, seq=0, status_success=True)
 
     # Ensure an obligration is scheduled
-    assert len(processor.command_cache) == 1
+    assert len(list(processor.command_cache.keys())) == 1
     assert len(asyncio.all_tasks(loop)) == 1
 
     # Get the response command

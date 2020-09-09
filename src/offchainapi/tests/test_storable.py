@@ -12,14 +12,17 @@ import pytest
 
 def test_dict(db):
     D = StorableDict(db, 'mary', int)
+    assert D.is_empty()
     D['x'] = 10
+    assert not D.is_empty()
+
     assert D['x'] == 10
-    assert len(D) == 1
+    assert len(list(D.keys())) == 1
     D['hello'] = 2
-    assert len(D) == 2
+    assert len(list(D.keys())) == 2
     del D['x']
     assert D['hello'] == 2
-    assert len(D) == 1
+    assert len(list(D.keys())) == 1
     assert 'hello' in D
     assert 'x' not in D
 
@@ -59,7 +62,7 @@ def test_dict_dict_del_to_empty():
     del D['x']
     D['y'] = True
     del D['y']
-    assert len(D) == 0
+    assert len(list(D.keys())) == 0
 
 
 def test_dict_index():
@@ -67,12 +70,12 @@ def test_dict_index():
     D = StorableDict(db, 'mary', int)
     D['x'] = 10
     assert D['x'] == 10
-    assert len(D) == 1
+    assert len(list(D.keys())) == 1
     D['hello'] = 2
-    assert len(D) == 2
+    assert len(list(D.keys())) == 2
     del D['x']
     assert D['hello'] == 2
-    assert len(D) == 1
+    assert len(list(D.keys())) == 1
     assert 'hello' in D
     assert 'x' not in D
 
@@ -239,8 +242,8 @@ def test_dict_trans():
 
     with store as _:
         x = eg['x']
-        l = len(eg)
+        #l = len(eg)
         eg['z'] = 20
 
-    assert len(eg) == 3
+    assert len(list(eg.keys())) == 3
     assert set(eg.keys()) == set(['x', 'y', 'z'])
