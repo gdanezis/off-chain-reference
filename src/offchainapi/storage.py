@@ -3,6 +3,7 @@
 
 # The main storage interface.
 
+from hashlib import sha256
 import json
 import contextvars
 from .utils import JSONFlag, JSONSerializable, get_unique_string
@@ -109,7 +110,7 @@ class StorableFactory:
         return v
 
     def _debug_print_context(self, op='', key='', value=''):
-        if False:
+        if True:
             print(f'Context: {self.context.get()}: {op} {key} {value}')
 
     # Define central interfaces as a dictionary structure
@@ -270,6 +271,9 @@ class StorableDict(Storable):
         self.db = db
         self.xtype = xtype
 
+        self._base_key = sha256(key_join(self.base_key()).encode('utf8')).digest().hex()
+        self._base_key_LL = self._base_key[:-2] + 'LL'
+
         # We create a doubly linked list to support traveral with O(1) lookup
         # addition and creation.
         meta = StorableValue(db, '__META', str, root=self)
@@ -396,12 +400,16 @@ class StorableDict(Storable):
             raise KeyError(key)
 
     def derive_keys(self, item):
+
         key = key_join(self.base_key() + [str(item)])
         key_LL = key_join(self.base_key() + ['LL', str(item)])
+
+        key = self._base_key + '.' + str(item)
+        key_LL = self._base_key_LL + '.' + str(item)
         return key, key_LL
 
     def __contains__(self, item):
-        db_key = key_join(self.base_key() + [str(item)])
+        db_key, _ = self.derive_keys(item)
         return db_key in self.db
 
 
@@ -420,7 +428,7 @@ class StorableValue(Storable):
         self.xtype = xtype
         self.db = db
         self._base_key = self.root + [self.name]
-        self._base_key_str = key_join(self._base_key)
+        self._base_key_str = sha256(key_join(self._base_key).encode('utf8')).digest().hex()
 
         self.has_value = False
 
