@@ -183,10 +183,8 @@ def test_protocol_server_client_benign(two_channels):
     assert isinstance(request, CommandRequestObject)
 
     # Pass the request to the client
-    assert len(client.other_request_index) == 0
     reply = client.handle_request(request)
     assert isinstance(reply, CommandResponseObject)
-    assert len(client.other_request_index) == 1
     assert reply.status == 'success'
 
     # Pass the reply back to the server
@@ -214,7 +212,6 @@ def test_protocol_server_conflicting_sequence(two_channels):
     reply_conflict = client.handle_request(request_conflict)
 
     # We only sequence one command.
-    assert len(client.other_request_index) == 1
     assert reply.status == 'success'
 
     # The response to the second command is a failure
@@ -237,13 +234,10 @@ def test_protocol_client_server_benign(two_channels):
     # Create a server request for a command
     request = client.sequence_command_local(SampleCommand('Hello'))
     assert isinstance(request, CommandRequestObject)
-    assert len(client.other_request_index) == 0
 
     # Send to server
-    assert len(client.other_request_index) == 0
     reply = server.handle_request(request)
     assert isinstance(reply, CommandResponseObject)
-    assert len(server.other_request_index) == 1
     assert server.next_final_sequence() == 1
     assert server.next_final_sequence() > 0
 
@@ -275,7 +269,6 @@ def test_protocol_server_client_interleaved_benign(two_channels):
     client.handle_response(server_reply)
 
     assert len(client.my_request_index) == 1
-    assert len(server.other_request_index) == 1
     assert len(client.get_final_sequence()) == 2
     assert len(server.get_final_sequence()) == 2
     assert {c.command.item() for c in client.get_final_sequence()} == {
@@ -300,7 +293,6 @@ def test_protocol_server_client_interleaved_swapped_request(two_channels):
     client.handle_response(server_reply)
 
     assert len(client.my_request_index) == 1
-    assert len(server.other_request_index) == 1
     assert len(client.get_final_sequence()) == 2
     assert len(server.get_final_sequence()) == 2
     assert {c.command.item() for c in client.get_final_sequence()} == {
@@ -396,7 +388,6 @@ def test_protocol_server_client_interleaved_swapped_reply(two_channels):
     client.handle_response(server_reply)
 
     assert len(client.my_request_index) == 1
-    assert len(server.other_request_index) == 1
     assert len(client.get_final_sequence()) == 2
     assert len(server.get_final_sequence()) == 2
     assert {c.command.item() for c in client.get_final_sequence()} == {

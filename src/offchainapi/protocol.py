@@ -176,9 +176,6 @@ class VASPPairChannel:
             self.my_request_index = self.storage.make_dict(
                         'my_request_index', CommandRequestObject,
                         root=other_vasp)
-            self.other_request_index = self.storage.make_dict(
-                        'other_request_index', CommandRequestObject,
-                        root=other_vasp)
 
             # Indicates for a request cid if a response has been received.
             self.pending_response = self.storage.make_dict(
@@ -214,16 +211,20 @@ class VASPPairChannel:
         """
         return len(self.command_sequence)
 
-    def get_final_sequence(self):
-        """
-        Returns:
-            list: The sequence of successful commands.
-        """
-        command_list = []
-        for cid in self.command_sequence.keys():
-            command_list += [ self.command_sequence[cid] ]
+    if __debug__:
+        # Only used for testing -- should not be used in production.
 
-        return command_list
+
+        def get_final_sequence(self):
+            """
+            Returns:
+                list: The sequence of successful commands.
+            """
+            command_list = []
+            for cid in self.command_sequence.keys():
+                command_list += [ self.command_sequence[cid] ]
+
+            return command_list
 
     def package_request(self, request):
         """ A hook to send a request to other VASP.
@@ -463,8 +464,8 @@ class VASPPairChannel:
         depends_on_version = request.command.get_dependencies()
 
         # Always answer old requests.
-        if request.cid in self.other_request_index:
-            previous_request = self.other_request_index[request.cid]
+        if request.cid in self.command_sequence:
+            previous_request = self.command_sequence[request.cid]
             if previous_request.has_response():
                 if previous_request.is_same_command(request):
 
@@ -546,7 +547,6 @@ class VASPPairChannel:
 
         # Update the index of others' requests
         self.command_sequence[request.cid] = request
-        self.other_request_index[request.cid] = request
         self.register_dependencies(request)
         self.apply_response(request)
 
