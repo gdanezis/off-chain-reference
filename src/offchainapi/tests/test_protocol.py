@@ -247,7 +247,7 @@ def test_protocol_client_server_benign(two_channels):
     assert succ
 
     assert client.next_final_sequence() > 0
-    assert client.my_request_index[request.cid].response is not None
+    assert client.command_sequence[request.cid].response is not None
     assert client.get_final_sequence()[0].command.item() == 'Hello'
     assert client.next_final_sequence() == 1
 
@@ -268,7 +268,7 @@ def test_protocol_server_client_interleaved_benign(two_channels):
 
     client.handle_response(server_reply)
 
-    assert len(client.my_request_index) == 1
+    assert len(client.my_request_index) == 0
     assert len(client.get_final_sequence()) == 2
     assert len(server.get_final_sequence()) == 2
     assert {c.command.item() for c in client.get_final_sequence()} == {
@@ -292,7 +292,7 @@ def test_protocol_server_client_interleaved_swapped_request(two_channels):
 
     client.handle_response(server_reply)
 
-    assert len(client.my_request_index) == 1
+    assert len(client.my_request_index) == 0
     assert len(client.get_final_sequence()) == 2
     assert len(server.get_final_sequence()) == 2
     assert {c.command.item() for c in client.get_final_sequence()} == {
@@ -387,7 +387,7 @@ def test_protocol_server_client_interleaved_swapped_reply(two_channels):
 
     client.handle_response(server_reply)
 
-    assert len(client.my_request_index) == 1
+    assert len(client.my_request_index) == 0
     assert len(client.get_final_sequence()) == 2
     assert len(server.get_final_sequence()) == 2
     assert {c.command.item() for c in client.get_final_sequence()} == {

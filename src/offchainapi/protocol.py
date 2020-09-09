@@ -154,8 +154,8 @@ class VASPPairChannel:
 
         with self.storage.atomic_writes() as _:
 
-            # The common sequence of commands and their
-            # status for those committed.
+            # The map of commited requests with their corresponding responses.
+            # This is used to ensure command responses are indempotent.
             self.command_sequence = self.storage.make_dict(
                 'command_sequence', CommandRequestObject, root=other_vasp
             )
@@ -173,13 +173,12 @@ class VASPPairChannel:
                         'object_locks', str, root=other_vasp)
 
             # Maps between request cid and requests for self and other.
+            #
+            # This stores requests that have not seen a response yet, and is
+            # used to retransmit them.
             self.my_request_index = self.storage.make_dict(
                         'my_request_index', CommandRequestObject,
                         root=other_vasp)
-
-            # Indicates for a request cid if a response has been received.
-            self.pending_response = self.storage.make_dict(
-                        'pending_response', bool, root=other_vasp)
 
         logger.debug(f'(other:{self.other_address_str}) Created VASP channel')
 
@@ -373,7 +372,6 @@ class VASPPairChannel:
 
                 # Add the request to those requiring a response.
                 self.my_request_index[request.cid] = request
-                self.pending_response[request.cid] = True
 
                 for dv in depends_on_version:
                     self.object_locks[dv] = request.cid
@@ -651,14 +649,10 @@ class VASPPairChannel:
 
         request_seq = response.cid
 
-        if request_seq not in self.my_request_index:
-            raise OffChainException(
-                f'Response for unknown cid {request_seq} received.'
-            )
-
         # Idenpotent: We have already processed the response.
-        request = self.my_request_index[request_seq]
-        if request.has_response():
+        if request_seq in self.command_sequence:
+            request = self.command_sequence[request_seq]
+
             # Check the reponse is the same and log warning otherwise.
             if request.response != response:
                 excp = OffChainException(
@@ -669,15 +663,22 @@ class VASPPairChannel:
                 raise excp
             # this request may have concurrent modification
             # read db to get latest status
-            return self.my_request_index[request_seq].is_success()
+            return self.command_sequence[request_seq].is_success()
+
+        if request_seq not in self.my_request_index:
+            raise OffChainException(
+                f'Response for unknown cid {request_seq} received.'
+            )
+
+        request = self.my_request_index[request_seq]
 
         # Read and write back response into request.
         request.response = response
-        del self.pending_response[request.cid]
 
         # Add the next command to the common sequence.
         self.command_sequence[request.cid] = request
-        self.my_request_index[request_seq] = request
+        del self.my_request_index[request_seq]
+
         self.register_dependencies(request)
         self.apply_response(request)
 
@@ -687,7 +688,7 @@ class VASPPairChannel:
         ''' Returns up to a `number` (int) of pending requests
         (CommandRequestObject)'''
         net_messages = []
-        for next_retransmit in islice(self.pending_response.keys(), number):
+        for next_retransmit in islice(self.my_request_index.keys(), number):
             request_to_send = self.my_request_index[next_retransmit]
             net_messages += [request_to_send]
         return net_messages
@@ -703,7 +704,7 @@ class VASPPairChannel:
         """ Returns true if there are any pending re-transmits, namely
             requests for which the response has not yet been received.
         """
-        return len(self.pending_response) > 0
+        return len(self.my_request_index) > 0
 
     def pending_retransmit_number(self):
         '''
@@ -711,4 +712,4 @@ class VASPPairChannel:
             the number of requests that are waiting to be
             retransmitted on this channel.
         '''
-        return len(self.pending_response)
+        return len(self.my_request_index)
