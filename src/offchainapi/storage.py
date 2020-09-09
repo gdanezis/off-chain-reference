@@ -277,7 +277,6 @@ class StorableDict(Storable):
             db, '__FIRST_KEY', str,
             root=meta, default='_NONE')
         self.first_key.debug = True
-        self.length = StorableValue(db, '__LEN', int, root=meta, default=0)
 
     if __debug__:
         def _check_invariant(self):
@@ -327,9 +326,6 @@ class StorableDict(Storable):
 
         # Ensure nothing fails after that
         if db_key not in self.db:
-            xlen = self.length.get_value()
-            self.length.set_value(xlen+1)
-
             # Add an entry to the linked list
             self._ll_cons(key)
 
@@ -360,8 +356,6 @@ class StorableDict(Storable):
 
     def __len__(self):
         raise RuntimeError('Tried to get len of storable dict.')
-        xlen = self.length.get_value()
-        return xlen
 
     def is_empty(self):
         ''' Returns True if dict is empty and False if it contains some elements.'''
@@ -372,8 +366,6 @@ class StorableDict(Storable):
     def __delitem__(self, key):
         db_key, db_key_LL = self.derive_keys(key)
         if db_key in self.db:
-            xlen = self.length.get_value()
-            self.length.set_value(xlen-1)
             del self.db[db_key]
 
             # Now fix the LL structure
