@@ -4,6 +4,7 @@
 # The main storage interface.
 
 import json
+import contextvars
 from .utils import JSONFlag, JSONSerializable, get_unique_string
 
 
@@ -23,6 +24,7 @@ class Storable:
     def __init__(self, xtype):
         self.xtype = xtype
         self.factory = None
+
 
     def pre_proc(self, val):
         """ Pre-processing of objects before storage. By default
@@ -62,6 +64,8 @@ class StorableFactory:
         self.db = db
         self.current_transaction = None
         self.levels = 0
+
+        self.context = contextvars.ContextVar('context', default=None)
 
         # Transaction cache: keep data in memory
         # until the transaction completes.
@@ -120,10 +124,15 @@ class StorableFactory:
         v.factory = self
         return v
 
+    def _debug_print_context(self, op='', key='', value=''):
+        print(f'Context: {self.context.get()}: {op} {key} {value}')
+
     # Define central interfaces as a dictionary structure
     # (with no keys or value enumeration)
 
     def __getitem__(self, key):
+        self._debug_print_context('get', key)
+
         # First look into the cache
         if key in self.del_cache:
             raise KeyError('The key is to be deleted.')
@@ -132,6 +141,8 @@ class StorableFactory:
         return self.db[key]
 
     def __setitem__(self, key, value):
+        self._debug_print_context('set', key)
+
         # Ensure all writes are within a transaction.
         if self.current_transaction is None:
             raise RuntimeError(
@@ -141,6 +152,8 @@ class StorableFactory:
             self.del_cache.remove(key)
 
     def __contains__(self, item):
+        self._debug_print_context('in', item)
+
         if item in self.del_cache:
             return False
         if item in self.cache:
@@ -148,6 +161,8 @@ class StorableFactory:
         return item in self.db
 
     def __delitem__(self, key):
+        self._debug_print_context('del', key)
+
         if self.current_transaction is None:
             raise RuntimeError(
                 'Writes must happen within a transaction context')
@@ -230,6 +245,7 @@ class StorableFactory:
     def __enter__(self):
         if self.levels == 0:
             self.current_transaction = get_unique_string()
+            self.context.set(self.current_transaction)
 
         self.levels += 1
 
@@ -237,6 +253,7 @@ class StorableFactory:
         self.levels -= 1
         if self.levels == 0:
             self.current_transaction = None
+            self.context.set(None)
             self.persist_cache()
 
 
