@@ -138,8 +138,8 @@ class RandomRun(object):
         assert len(client_seq) == NUMBER - self.rejected
         assert set(client_seq) == set(server_seq)
 
-        client_exec_seq = [c.command.item() for c in client.command_sequence]
-        server_exec_seq = [c.command.item() for c in server.command_sequence]
+        client_exec_seq = [c.command.item() for c in client.get_final_sequence()]
+        server_exec_seq = [c.command.item() for c in server.get_final_sequence()]
         assert set(client_seq) == set(client_exec_seq)
         assert set(server_seq) == set(server_exec_seq)
 

@@ -156,7 +156,7 @@ class VASPPairChannel:
 
             # The common sequence of commands and their
             # status for those committed.
-            self.command_sequence = self.storage.make_list(
+            self.command_sequence = self.storage.make_dict(
                 'command_sequence', CommandRequestObject, root=other_vasp
             )
 
@@ -219,7 +219,11 @@ class VASPPairChannel:
         Returns:
             list: The sequence of successful commands.
         """
-        return self.command_sequence
+        command_list = []
+        for cid in self.command_sequence.keys():
+            command_list += [ self.command_sequence[cid] ]
+
+        return command_list
 
     def package_request(self, request):
         """ A hook to send a request to other VASP.
@@ -541,7 +545,7 @@ class VASPPairChannel:
         request.response = response
 
         # Update the index of others' requests
-        self.command_sequence += [request]
+        self.command_sequence[request.cid] = request
         self.other_request_index[request.cid] = request
         self.register_dependencies(request)
         self.apply_response(request)
@@ -672,7 +676,7 @@ class VASPPairChannel:
         del self.pending_response[request.cid]
 
         # Add the next command to the common sequence.
-        self.command_sequence += [request]
+        self.command_sequence[request.cid] = request
         self.my_request_index[request_seq] = request
         self.register_dependencies(request)
         self.apply_response(request)

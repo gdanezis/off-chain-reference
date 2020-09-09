@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Tests for the storage framework
-from ..storage import StorableDict, StorableList, StorableValue, StorableFactory
+from ..storage import StorableDict, StorableValue, StorableFactory
 from ..payment_logic import PaymentCommand
 from ..protocol_messages import make_success_response, CommandRequestObject, \
     make_command_error
@@ -77,39 +77,6 @@ def test_dict_index():
     assert 'x' not in D
 
 
-def test_list(db):
-    lst = StorableList(db, 'jacklist', int)
-    lst += [1]
-    assert len(lst) == 1
-    assert lst[0] == 1
-    lst += [2]
-    assert len(lst) == 2
-    lst[0] = 10
-    assert lst[0] == 10
-    lst2 = StorableList(db, 'jacklist', int)
-    assert len(lst2) == 2
-    assert lst2[0] == 10
-
-    assert list(lst2) == [10, 2]
-
-
-def test_list_dict():
-    db = {}
-    lst = StorableList(db, 'jacklist', int)
-    lst += [1]
-    assert len(lst) == 1
-    assert lst[0] == 1
-    lst += [2]
-    assert len(lst) == 2
-    lst[0] = 10
-    assert lst[0] == 10
-    lst2 = StorableList(db, 'jacklist', int)
-    assert len(lst2) == 2
-    assert lst2[0] == 10
-
-    assert list(lst2) == [10, 2]
-
-
 def test_value(db):
     # Test default
     val0 = StorableValue(db, 'counter_zero', int, default=0)
@@ -158,10 +125,6 @@ def test_value_payment(db, payment):
     assert val.exists() is True
     pay2 = val.get_value()
     assert payment == pay2
-
-    lst = StorableList(db, 'jacklist', payment.__class__)
-    lst += [payment]
-    assert lst[0] == pay2
 
     D = StorableDict(db, 'mary', payment.__class__)
     D[pay2.version] = pay2

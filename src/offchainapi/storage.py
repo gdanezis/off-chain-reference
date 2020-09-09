@@ -92,22 +92,6 @@ class StorableFactory:
         v.factory = self
         return v
 
-    def make_list(self, name, xtype, root):
-        ''' Makes a new list-like storable. The type of the objects
-            stored is xtype, or any subclass of JSONSerializable.
-
-            Parameters:
-                * name : a string representing the name of the object.
-                * xtype : the type of the object stored in the list.
-                  It may be a simple type or a subclass of
-                  JSONSerializable.
-                * root : another storable object that acts as a logical
-                  folder to this one.
-        '''
-        v = StorableList(self, name, xtype, root)
-        v.factory = self
-        return v
-
     def make_dict(self, name, xtype, root):
         ''' A new map-like storable object.
 
@@ -125,7 +109,8 @@ class StorableFactory:
         return v
 
     def _debug_print_context(self, op='', key='', value=''):
-        print(f'Context: {self.context.get()}: {op} {key} {value}')
+        if False:
+            print(f'Context: {self.context.get()}: {op} {key} {value}')
 
     # Define central interfaces as a dictionary structure
     # (with no keys or value enumeration)
@@ -419,71 +404,6 @@ class StorableDict(Storable):
     def __contains__(self, item):
         db_key = key_join(self.base_key() + [str(item)])
         return db_key in self.db
-
-
-class StorableList(Storable):
-    ''' A list-like object that can be stored.
-
-    Supports:
-        * __getitem__(self, key)
-        * __setitem__(self, key, value)
-        * __len__(self)
-        * __iadd__(self, other)
-
-    Keys are always integers.
-    '''
-
-    def __init__(self, db, name, xtype, root=None):
-        if root is None:
-            self.root = ['']
-        else:
-            self.root = root.base_key()
-        self.name = name
-        self.db = db
-        self.xtype = xtype
-
-        self.length = StorableValue(db, '__LEN', int, root=self, default=0)
-        if not self.length.exists():
-            self.length.set_value(0)
-
-    def base_key(self):
-        return self.root + [self.name]
-
-    def __getitem__(self, key):
-        if type(key) is not int:
-            raise KeyError('Key must be an int.')
-        xlen = len(self)
-        if not 0 <= key < xlen:
-            raise KeyError('Key does not exist')
-
-        db_key = key_join(self.base_key() + [str(key)])
-        return self.post_proc(json.loads(self.db[db_key]))
-
-    def __setitem__(self, key, value):
-        if type(key) is not int:
-            raise KeyError('Key must be an int.')
-        xlen = len(self)
-        if not 0 <= key < xlen:
-            raise KeyError('Key does not exist')
-        db_key = key_join(self.base_key() + [str(key)])
-        self.db[db_key] = json.dumps(self.pre_proc(value))
-
-    def __len__(self):
-        xlen = self.length.get_value()
-        assert type(xlen) is int
-        return xlen
-
-    def __iadd__(self, other):
-        for item in other:
-            assert isinstance(item, self.xtype)
-            xlen = self.length.get_value()
-            self.length.set_value(xlen+1)
-            self[xlen] = item
-            return self
-
-    def __iter__(self):
-        for key in range(len(self)):
-            yield self[key]
 
 
 class StorableValue(Storable):
