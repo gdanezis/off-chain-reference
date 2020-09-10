@@ -146,39 +146,36 @@ class VASPPairChannel:
             )
 
         # State that is persisted.
-
-        root = self.storage.make_value(self.myself.as_str(), None)
-        other_vasp = self.storage.make_value(
-            self.other_address_str, None, root=root
+        root = self.storage.make_dir(self.myself.as_str())
+        other_vasp = self.storage.make_dir(
+            self.other_address_str, root=root
         )
 
-        with self.storage.atomic_writes() as _:
+        # The map of commited requests with their corresponding responses.
+        # This is used to ensure command responses are indempotent.
+        self.command_sequence = self.storage.make_dict(
+            'command_sequence', CommandRequestObject, root=other_vasp
+        )
 
-            # The map of commited requests with their corresponding responses.
-            # This is used to ensure command responses are indempotent.
-            self.command_sequence = self.storage.make_dict(
-                'command_sequence', CommandRequestObject, root=other_vasp
-            )
+        # Keep track of object locks
 
-            # Keep track of object locks
+        # Object_locks takes values 'True', 'False' or a request cid.
+        #  * True means that the object exists and is ready to be used
+        #    by a command.
+        #  * False means that an object exists, but has already been used
+        #    by a command that is committed.
+        #  * Another value indicates a lock for a request with the cid
+        #    stored.
+        self.object_locks = self.storage.make_dict(
+                    'object_locks', str, root=other_vasp)
 
-            # Object_locks takes values 'True', 'False' or a request cid.
-            #  * True means that the object exists and is ready to be used
-            #    by a command.
-            #  * False means that an object exists, but has already been used
-            #    by a command that is committed.
-            #  * Another value indicates a lock for a request with the cid
-            #    stored.
-            self.object_locks = self.storage.make_dict(
-                        'object_locks', str, root=other_vasp)
-
-            # Maps between request cid and requests for self and other.
-            #
-            # This stores requests that have not seen a response yet, and is
-            # used to retransmit them.
-            self.my_request_index = self.storage.make_dict(
-                        'my_request_index', CommandRequestObject,
-                        root=other_vasp)
+        # Maps between request cid and requests for self and other.
+        #
+        # This stores requests that have not seen a response yet, and is
+        # used to retransmit them.
+        self.my_request_index = self.storage.make_dict(
+                    'my_request_index', CommandRequestObject,
+                    root=other_vasp)
 
         logger.debug(f'(other:{self.other_address_str}) Created VASP channel')
 

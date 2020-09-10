@@ -57,21 +57,21 @@ class PaymentProcessor(CommandProcessor):
         # The processor state -- only access through event loop to prevent
         # mutlithreading bugs.
         self.storage_factory = storage_factory
-        with self.storage_factory.atomic_writes():
-            root = storage_factory.make_value('processor', None)
-            self.reference_id_index = storage_factory.make_dict(
-                'reference_id_index', PaymentObject, root)
 
-            # This is the primary store of shared objects.
-            # It maps version numbers -> objects.
-            self.object_store = storage_factory.make_dict(
-                'object_store', SharedObject, root=root)
+        root = storage_factory.make_dir('processor')
+        self.reference_id_index = storage_factory.make_dict(
+            'reference_id_index', PaymentObject, root)
 
-            # Persist those to enable crash-recovery
-            self.pending_commands = storage_factory.make_dict(
-                'pending_commands', str, root)
-            self.command_cache = storage_factory.make_dict(
-                'command_cache', ProtocolCommand, root)
+        # This is the primary store of shared objects.
+        # It maps version numbers -> objects.
+        self.object_store = storage_factory.make_dict(
+            'object_store', SharedObject, root=root)
+
+        # Persist those to enable crash-recovery
+        self.pending_commands = storage_factory.make_dict(
+            'pending_commands', str, root)
+        self.command_cache = storage_factory.make_dict(
+            'command_cache', ProtocolCommand, root)
 
         # Allow mapping a set of future to payment reference_id outcomes
         # Once a payment has an outcome (ready_for_settlement, abort, or command exception)

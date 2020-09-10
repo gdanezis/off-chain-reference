@@ -90,62 +90,24 @@ def test_dict_index():
     assert 'x' not in D
 
 
-def test_value():
-    # Test default
-    db = BasicStore.mem()
-    db.can_write = True
-
-    val0 = StorableValue(db, 'counter_zero', int, default=0)
-    assert val0.get_value() == 0
-    assert val0.exists()
-    val0.set_value(10)
-    assert val0.get_value() == 10
-
-    val = StorableValue(db, 'counter', int)
-    assert val.exists() is False
-    val.set_value(10)
-    assert val.exists() is True
-
-    val2 = StorableValue(db, 'counter', int)
-    assert val2.exists() is True
-    assert val2.get_value() == 10
-
-
-def test_value_dict():
-    db = BasicStore.mem()
-    db.can_write = True
-
-    val = StorableValue(db, 'counter', int)
-    assert val.exists() is False
-    val.set_value(10)
-    assert val.exists() is True
-
-    val2 = StorableValue(db, 'counter', int)
-    assert val2.exists() is True
-    assert val2.get_value() == 10
-
-
 def test_hierarchy():
     db = BasicStore.mem()
     db.can_write = True
 
-    val = StorableValue(db, 'counter', int)
-    val.set_value(10)
+    val = StorableValue(db, 'counter', None)
 
-    val2 = StorableValue(db, 'counter', int, root=val)
-    assert val2.exists() is False
-    val2.set_value(20)
-    assert val.get_value() == 10
-    assert val2.get_value() == 20
+    val2 = StorableDict(db, 'counter', int, root=val)
+
+    val2['xx'] = 20
+    assert val2['xx'] == 20
 
 
 def test_value_payment(db, payment):
     db.can_write = True
-    val = StorableValue(db, 'payment', payment.__class__)
-    assert val.exists() is False
-    val.set_value(payment)
-    assert val.exists() is True
-    pay2 = val.get_value()
+    val = StorableDict(db, 'payment', payment.__class__)
+
+    val['name'] = payment
+    pay2 = val['name']
     assert payment == pay2
 
     D = StorableDict(db, 'mary', payment.__class__)
@@ -158,14 +120,14 @@ def test_value_command(db, payment):
 
     cmd = PaymentCommand(payment)
 
-    val = StorableValue(db, 'command', PaymentCommand)
-    val.set_value(cmd)
-    assert val.get_value() == cmd
+    val = StorableDict(db, 'command', PaymentCommand)
+    val['name'] = cmd
+    assert val['name'] == cmd
 
     cmd.writes_version_map = [('xxxxxxxx', 'xxxxxxxx')]
-    assert val.get_value() != cmd
-    val.set_value(cmd)
-    assert val.get_value() == cmd
+    assert val['name'] != cmd
+    val['name'] = cmd
+    assert val['name'] == cmd
 
 
 def test_value_request(db, payment):
@@ -173,22 +135,22 @@ def test_value_request(db, payment):
     cmd = CommandRequestObject(PaymentCommand(payment))
     cmd.cid = '10'
 
-    val = StorableValue(db, 'command', CommandRequestObject)
-    val.set_value(cmd)
-    assert val.get_value() == cmd
+    val = StorableDict(db, 'command', CommandRequestObject)
+    val['name'] = cmd
+    assert val['name'] == cmd
 
     cmd.response = make_success_response(cmd)
     assert cmd.response is not None
-    assert val.get_value() != cmd
-    assert val.get_value().response is None
+    assert val['name'] != cmd
+    assert val['name'].response is None
 
-    val.set_value(cmd)
-    assert val.get_value() == cmd
+    val['name'] = cmd
+    assert val['name'] == cmd
 
     cmd.response = make_command_error(cmd, code=OffChainErrorCode.test_error_code)
-    assert val.get_value() != cmd
-    val.set_value(cmd)
-    assert val.get_value() == cmd
+    assert val['name'] != cmd
+    val['name'] = cmd
+    assert val['name'] == cmd
 
 def test_dict_trans():
     db = BasicStore.mem()

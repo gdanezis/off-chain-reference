@@ -158,7 +158,7 @@ class StorableFactory:
         self.current_transaction = None
         self.levels = 0
 
-    def make_value(self, name, xtype, root=None, default=None):
+    def make_dir(self, name, root=None):
         ''' Makes a new value-like storable.
 
             Parameters:
@@ -170,8 +170,8 @@ class StorableFactory:
                 * default : the default value of the storable.
 
         '''
-        assert default is None or type(default) == xtype
-        v = StorableValue(self.db, name, xtype, root, default)
+
+        v = StorableValue(self.db, name, root)
         v.factory = self
         return v
 
@@ -289,52 +289,20 @@ class StorableDict(Storable):
         return self.db.isin(self.ns, item)
 
 
-class StorableValue(Storable):
+class StorableValue:
     """ Implements a cached persistent value. The value is stored to storage
         but a cached variant is stored for quick reads.
     """
 
-    def __init__(self, db, name, xtype, root=None, default=None):
+    def __init__(self, db, name, root=None):
         if root is None:
             self.root = ['']
         else:
             self.root = root.base_key()
 
         self.name = name
-        self.xtype = xtype
         self.db = db
-        self._base_key = self.root + [self.name]
-        self.ns = sha256(key_join(self._base_key).encode('utf8')).digest().hex()
-
-        self.has_value = False
-
-        if self.exists():
-            self.value = self.get_value()
-        else:
-            self.value = None
-            if default is not None:
-                self.set_value(default)
-
-    def set_value(self, value):
-        ''' Sets the vale for this instance.
-            Value must be of the right type namely ``xtype``.
-        '''
-        json_data = json.dumps(self.pre_proc(value))
-        self.db.put(self.ns, self.name, json_data)
-        self.has_value = True
-        self.value = value
-
-    def get_value(self):
-        ''' Get the value for this object. '''
-        encoded_value = self.db.get(self.ns, self.name)
-        val = json.loads(encoded_value)
-        self.value = self.post_proc(val)
-        self.has_value = True
-        return self.value
-
-    def exists(self):
-        ''' Tests if this value exist in storage. '''
-        return self.has_value or self.db.isin(self.ns, self.name)
+        self.ns = sha256(key_join(self.base_key()).encode('utf8')).digest().hex()
 
     def base_key(self):
-        return self._base_key
+        return self.root + [ self.name ]
