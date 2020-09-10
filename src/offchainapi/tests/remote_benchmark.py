@@ -12,6 +12,7 @@ from ..asyncnet import Aionet
 from ..core import Vasp
 from ..crypto import ComplianceKey
 from .basic_business_context import TestBusinessContext
+from ..storage import BasicStore
 
 import logging
 import json
@@ -96,7 +97,7 @@ def run_server(my_configs_path, other_configs_path, num_of_commands=10, loop=Non
         port=my_configs['port'],
         business_context=AsyncMock(spec=BusinessContext),
         info_context=SimpleVASPInfo(my_configs, other_configs),
-        database={}
+        database=BasicStore.mem()
     )
     logging.info(f'Created VASP {my_addr.as_str()}.')
 
@@ -156,7 +157,7 @@ def run_client(my_configs_path, other_configs_path, num_of_commands=10, port=0):
         port=my_configs['port'],
         business_context=TestBusinessContext(my_addr),
         info_context=SimpleVASPInfo(my_configs, other_configs, port),
-        database={}
+        database=BasicStore.mem()
     )
     logging.info(f'Created VASP {my_addr.as_str()}.')
 

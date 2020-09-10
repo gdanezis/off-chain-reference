@@ -31,10 +31,10 @@ def payment_sender_init():
     payment = PaymentObject(sender, receiver, ref, None, None, action)
     return payment
 
-def test_logic_protocol_check(payment_sender_init, loop):
+def test_logic_protocol_check(db, payment_sender_init, loop):
     # Test the protocol given a sequence of commands.
 
-    store = StorableFactory({})
+    store = StorableFactory(db)
 
     my_addr = LibraAddress.from_bytes(b'B'*16)
     other_addr = LibraAddress.from_bytes(b'A'*16)
@@ -50,10 +50,10 @@ def test_logic_protocol_check(payment_sender_init, loop):
     processor.check_command(my_addr, other_addr, cmd)
 
 
-def test_logic_protocol_process_start(payment_sender_init, loop):
+def test_logic_protocol_process_start(db, payment_sender_init, loop):
     # Test the protocol given a sequence of commands.
 
-    store = StorableFactory({})
+    store = StorableFactory(db)
 
     my_addr = LibraAddress.from_bytes(b'B'*16)
     other_addr = LibraAddress.from_bytes(b'A'*16)

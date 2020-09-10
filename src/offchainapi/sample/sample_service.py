@@ -9,7 +9,7 @@ from ..protocol_messages import CommandRequestObject, OffChainProtocolError, \
     OffChainException
 from ..payment_logic import PaymentCommand, PaymentProcessor
 from ..status_logic import Status
-from ..storage import StorableFactory
+from ..storage import StorableFactory, BasicStore
 from ..crypto import ComplianceKey
 from ..errors import OffChainErrorCode
 
@@ -236,7 +236,7 @@ class sample_vasp:
     def __init__(self, my_addr):
         self.my_addr = my_addr
         self.bc = sample_business(self.my_addr)
-        self.store        = StorableFactory({})
+        self.store        = StorableFactory(BasicStore.mem())
         self.info_context = sample_vasp_info()
 
         self.pp = PaymentProcessor(self.bc, self.store)

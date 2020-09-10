@@ -7,6 +7,98 @@ from hashlib import sha256
 import json
 import contextvars
 from .utils import JSONFlag, JSONSerializable, get_unique_string
+import sqlite3
+
+class BasicStore:
+
+    @staticmethod
+    def mem():
+        return BasicStore(sqlite3.connect(':memory:', check_same_thread=False))
+
+    def __init__(self, db):
+        self.db = db
+        self.can_write = False
+
+        try:
+            self.db.execute("""CREATE TABLE kvstore (
+                ns text NOT NULL,
+                key text NOT NULL,
+                val text NOT NULL)""")
+
+            self.db.execute("""CREATE UNIQUE INDEX namespace_key
+                            ON kvstore (ns, key)""")
+
+            self.db.commit()
+        except sqlite3.OperationalError:
+            # Table exists
+            pass
+
+    def set_write(self, can_wrtie):
+        self.can_write = can_wrtie
+
+    def check_write(self):
+        if not self.can_write:
+            raise RuntimeError('Store cannot be used for writing outside a transaction.')
+
+    def get(self, ns, key):
+        sql = """SELECT val
+                 FROM kvstore
+                WHERE ns=? and key=?"""
+
+        res = self.db.execute(sql, (ns, key, ))
+
+        val = res.fetchone()
+        if val is None:
+            raise KeyError((ns, key))
+        else:
+            return val[0]
+
+    def put(self, ns, key, val):
+        self.check_write()
+
+        sql = """INSERT OR REPLACE INTO kvstore (ns, key, val)
+                 VALUES (?, ?, ?)"""
+
+        res = self.db.execute(sql, (ns, key, val))
+
+    def delete(self, ns, key):
+        self.check_write()
+
+        sql = """DELETE FROM kvstore
+                 WHERE ns=? AND key=?"""
+
+        res = self.db.execute(sql, (ns, key,) )
+        if res.rowcount == 0:
+            raise KeyError((ns, key))
+
+    def isin(self, ns, key):
+        try:
+            self.get(ns, key)
+            return True
+        except KeyError:
+            return False
+
+    def getkeys(self, ns):
+        sql = """SELECT key
+                 FROM kvstore
+                WHERE ns=?"""
+
+        res = self.db.execute(sql, (ns, ))
+        return list(r[0] for r in res)
+
+    def count(self, ns):
+        sql = """SELECT COUNT(key)
+                 FROM kvstore
+                WHERE ns=?"""
+
+        res = self.db.execute(sql, (ns, ))
+        return res.fetchone()[0]
+
+    def end_transaction(self, commit=True):
+        if commit:
+            self.db.commit()
+        else:
+            self.db.rollback()
 
 
 def key_join(strs):
@@ -66,16 +158,6 @@ class StorableFactory:
         self.current_transaction = None
         self.levels = 0
 
-        self.context = contextvars.ContextVar('context', default=None)
-
-        # Transaction cache: keep data in memory
-        # until the transaction completes.
-        self.cache = {}
-        self.del_cache = set()
-
-        # Check and fix the database, if this is needed
-        self.crash_recovery()
-
     def make_value(self, name, xtype, root=None, default=None):
         ''' Makes a new value-like storable.
 
@@ -89,7 +171,7 @@ class StorableFactory:
 
         '''
         assert default is None or type(default) == xtype
-        v = StorableValue(self, name, xtype, root, default)
+        v = StorableValue(self.db, name, xtype, root, default)
         v.factory = self
         return v
 
@@ -105,114 +187,9 @@ class StorableFactory:
                   folder to this one.
 
         '''
-        v = StorableDict(self, name, xtype, root)
+        v = StorableDict(self.db, name, xtype, root)
         v.factory = self
         return v
-
-    def _debug_print_context(self, op='', key='', value=''):
-        if True:
-            print(f'Context: {self.context.get()}: {op} {key} {value}')
-
-    # Define central interfaces as a dictionary structure
-    # (with no keys or value enumeration)
-
-    def __getitem__(self, key):
-        self._debug_print_context('get', key)
-
-        # First look into the cache
-        if key in self.del_cache:
-            raise KeyError('The key is to be deleted.')
-        if key in self.cache:
-            return self.cache[key]
-        return self.db[key]
-
-    def __setitem__(self, key, value):
-        self._debug_print_context('set', key)
-
-        # Ensure all writes are within a transaction.
-        if self.current_transaction is None:
-            raise RuntimeError(
-                'Writes must happen within a transaction context')
-        self.cache[key] = value
-        if key in self.del_cache:
-            self.del_cache.remove(key)
-
-    def __contains__(self, item):
-        self._debug_print_context('in', item)
-
-        if item in self.del_cache:
-            return False
-        if item in self.cache:
-            return True
-        return item in self.db
-
-    def __delitem__(self, key):
-        self._debug_print_context('del', key)
-
-        if self.current_transaction is None:
-            raise RuntimeError(
-                'Writes must happen within a transaction context')
-        if key in self.cache:
-            del self.cache[key]
-        self.del_cache.add(key)
-
-    def persist_cache(self):
-        ''' Safely persist the cache once the transaction is over.
-            This is called internally when the context manager exists.
-        '''
-
-        from itertools import chain
-
-        # Create a backup of all affected values.
-        old_entries = {}
-        non_existent_entries = []
-        for key in chain(self.cache.keys(), self.del_cache):
-            if key in self.db:
-                old_entries[key] = self.db[key]
-            else:
-                non_existent_entries += [key]
-
-        if len(old_entries) == 0 and len(non_existent_entries) == 0:
-            return
-
-        backup_data = json.dumps([old_entries, non_existent_entries])
-        self.db['__backup_recovery'] = backup_data
-        # TODO: call to flush to disk
-
-        # Write new values to the database
-        for item in self.cache:
-            self.db[item] = self.cache[item]
-        for item in self.del_cache:
-            if item in self.db:
-                del self.db[item]
-
-        # Upon completion of write, clean up
-        del self.db['__backup_recovery']
-        self.cache = {}
-        self.del_cache = set()
-
-    def crash_recovery(self):
-        ''' Detects whether a database contains potentially inconsistent state
-            and recovers a good state of the database. '''
-
-        if '__backup_recovery' not in self.db:
-            return
-
-        # Recover the old good state.
-        backup_data = json.loads(self.db['__backup_recovery'])
-        old_entries = backup_data[0]
-        non_existent_entries = backup_data[1]
-
-        # Note, this may be executed many times in case of crash during
-        # crash recovery.
-        for item in old_entries:
-            self.db[item] = old_entries[item]
-        for item in non_existent_entries:
-            if item in self.db:
-                del self.db[item]
-
-        # TODO: Ensure the writes are complete?
-        del self.db['__backup_recovery']
 
     # Define the interfaces as a context manager
 
@@ -231,16 +208,20 @@ class StorableFactory:
     def __enter__(self):
         if self.levels == 0:
             self.current_transaction = get_unique_string()
-            self.context.set(self.current_transaction)
+            self.db.set_write(True)
 
         self.levels += 1
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.levels -= 1
         if self.levels == 0:
             self.current_transaction = None
-            self.context.set(None)
-            self.persist_cache()
+            self.db.set_write(False)
+            if exc_type:
+                self.db.end_transaction(commit=False)
+                print('STORAGE ERROR Rollback', exc_type, exc_value)
+            else:
+                self.db.end_transaction(commit=True)
 
 
 
@@ -271,87 +252,22 @@ class StorableDict(Storable):
         self.db = db
         self.xtype = xtype
 
-        self._base_key = sha256(key_join(self.base_key()).encode('utf8')).digest().hex()
-        self._base_key_LL = self._base_key[:-2] + 'LL'
-
-        # We create a doubly linked list to support traveral with O(1) lookup
-        # addition and creation.
-        meta = StorableValue(db, '__META', str, root=self)
-        self.first_key = StorableValue(
-            db, '__FIRST_KEY', str,
-            root=meta, default='_NONE')
-        self.first_key.debug = True
-
-    if __debug__:
-        def _check_invariant(self):
-            if self.first_key.get_value() != '_NONE':
-                first_value_key = self.first_key.get_value()
-                # [prev_LL_key, next_LL_key, db_key, key]
-                first_ll_entry = json.loads(self.db[first_value_key])
-                assert first_ll_entry[0] is None
+        self.ns = sha256(key_join(self.base_key()).encode('utf8')).digest().hex()
 
     def base_key(self):
         return self.root + [self.name]
 
     def __getitem__(self, key):
-        db_key, db_key_LL = self.derive_keys(key)
-        return self.post_proc(json.loads(self.db[db_key]))
-
-    def _ll_cons(self, key):
-        db_key, db_key_LL = self.derive_keys(key)
-        assert db_key_LL not in self.db
-
-        if self.first_key.get_value() != '_NONE':
-            # All new entries to the front
-            first_value_key = self.first_key.get_value()
-            assert first_value_key is not None
-
-            # Format of the LL_entry is:
-            # [prev_LL_key, next_LL_key, db_key, key]
-            ll_entry = [None, first_value_key, str(db_key), key]
-
-            # Modify the record of first value
-            first_ll_entry = json.loads(self.db[first_value_key])
-            first_ll_entry[0] = db_key_LL
-            self.db[first_value_key] = json.dumps(first_ll_entry)
-        else:
-            # This is the first entry, setup the record and first key
-            ll_entry = [None, None, str(db_key), key]
-
-        self.first_key.set_value(db_key_LL)
-        self.db[db_key_LL] = json.dumps(ll_entry)
-
-        if __debug__:
-            self._check_invariant()
+        return self.post_proc(json.loads(self.db.get(self.ns, key)))
 
     def __setitem__(self, key, value):
-        db_key, _ = self.derive_keys(key)
         data = json.dumps(self.pre_proc(value))
+        self.db.put(self.ns, key, data)
 
-        # Ensure nothing fails after that
-        if db_key not in self.db:
-            # Add an entry to the linked list
-            self._ll_cons(key)
-
-        self.db[db_key] = data
-
-        if __debug__:
-            self._check_invariant()
 
     def keys(self):
         ''' An iterator over the keys of the dictionary. '''
-        if __debug__:
-            self._check_invariant()
-
-        if not self.first_key.get_value() != '_NONE':
-            return
-        ll_value_key = self.first_key.get_value()
-        while True:
-            ll_entry = json.loads(self.db[ll_value_key])
-            ll_value_key = ll_entry[1]
-            yield ll_entry[3]
-            if ll_value_key is None:
-                break
+        return self.db.getkeys(self.ns)
 
     def values(self):
         ''' An iterator over the values of the dictionary. '''
@@ -359,58 +275,18 @@ class StorableDict(Storable):
             yield self[k]
 
     def __len__(self):
-        raise RuntimeError('Tried to get len of storable dict.')
+        return self.db.count()
 
     def is_empty(self):
         ''' Returns True if dict is empty and False if it contains some elements.'''
-        for _ in self.keys():
-            return False
-        return True
+        return self.db.count(self.ns) == 0
+
 
     def __delitem__(self, key):
-        db_key, db_key_LL = self.derive_keys(key)
-        if db_key in self.db:
-            del self.db[db_key]
-
-            # Now fix the LL structure
-            ll_entry = json.loads(self.db[db_key_LL])
-            prev_key, next_key, _, _ = tuple(ll_entry)
-
-            prev_entry = None
-            if prev_key is not None:
-                prev_entry = json.loads(self.db[prev_key])
-                prev_entry[1] = next_key
-                self.db[prev_key] = json.dumps(prev_entry)
-
-            next_entry = None
-            if next_key is not None:
-                next_entry = json.loads(self.db[next_key])
-                next_entry[0] = prev_key
-                self.db[next_key] = json.dumps(next_entry)
-                if prev_key is None:
-                    _, next_db_key_LL = self.derive_keys(next_key)
-                    self.first_key.set_value(next_key)
-
-            if next_key is None and prev_key is None:
-                # The Linked List needs to become empty.
-                self.first_key.set_value('_NONE')
-
-            del self.db[db_key_LL]
-        else:
-            raise KeyError(key)
-
-    def derive_keys(self, item):
-
-        key = key_join(self.base_key() + [str(item)])
-        key_LL = key_join(self.base_key() + ['LL', str(item)])
-
-        key = self._base_key + '.' + str(item)
-        key_LL = self._base_key_LL + '.' + str(item)
-        return key, key_LL
+        self.db.delete(self.ns, key)
 
     def __contains__(self, item):
-        db_key, _ = self.derive_keys(item)
-        return db_key in self.db
+        return self.db.isin(self.ns, item)
 
 
 class StorableValue(Storable):
@@ -428,7 +304,7 @@ class StorableValue(Storable):
         self.xtype = xtype
         self.db = db
         self._base_key = self.root + [self.name]
-        self._base_key_str = sha256(key_join(self._base_key).encode('utf8')).digest().hex()
+        self.ns = sha256(key_join(self._base_key).encode('utf8')).digest().hex()
 
         self.has_value = False
 
@@ -444,15 +320,13 @@ class StorableValue(Storable):
             Value must be of the right type namely ``xtype``.
         '''
         json_data = json.dumps(self.pre_proc(value))
-        key = self._base_key_str
-        self.db[key] = json_data
+        self.db.put(self.ns, self.name, json_data)
         self.has_value = True
         self.value = value
 
     def get_value(self):
         ''' Get the value for this object. '''
-        key = self._base_key_str
-        encoded_value = self.db[key]
+        encoded_value = self.db.get(self.ns, self.name)
         val = json.loads(encoded_value)
         self.value = self.post_proc(val)
         self.has_value = True
@@ -460,7 +334,7 @@ class StorableValue(Storable):
 
     def exists(self):
         ''' Tests if this value exist in storage. '''
-        return self.has_value or self._base_key_str in self.db
+        return self.has_value or self.db.isin(self.ns, self.name)
 
     def base_key(self):
         return self._base_key

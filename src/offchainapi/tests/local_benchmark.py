@@ -14,6 +14,7 @@ from ..payment import PaymentAction, PaymentActor, PaymentObject, StatusObject
 from ..core import Vasp
 from .basic_business_context import TestBusinessContext
 from ..crypto import ComplianceKey
+from ..storage import BasicStore
 
 from threading import Thread
 import time
@@ -77,7 +78,7 @@ def make_new_VASP(Peer_addr, port, reliable=True):
         port=port,
         business_context=TestBusinessContext(Peer_addr, reliable=reliable),
         info_context=SimpleVASPInfo(Peer_addr),
-        database={})
+        database=BasicStore.mem())
 
     loop = asyncio.new_event_loop()
     VASPx.set_loop(loop)

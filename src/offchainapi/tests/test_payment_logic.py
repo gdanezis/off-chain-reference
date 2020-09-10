@@ -282,8 +282,8 @@ def test_payment_process_get_extended_kyc(payment, processor, kyc_data):
     assert new_payment.receiver.kyc_data == kyc_data
 
 
-def test_persist(payment):
-    store = StorableFactory({})
+def test_persist(db, payment):
+    store = StorableFactory(db)
 
     my_addr = LibraAddress.from_bytes(b'A'*16)
     my_addr_str = my_addr.as_str()
@@ -317,8 +317,8 @@ def test_persist(payment):
     assert len(processor.list_command_obligations()) == 0
 
 
-def test_reprocess(payment,  loop):
-    store = StorableFactory({})
+def test_reprocess(db, payment,  loop):
+    store = StorableFactory(db)
 
     my_addr = LibraAddress.from_bytes(b'A'*16)
     my_addr_str = my_addr.as_str()
@@ -348,8 +348,8 @@ def test_reprocess(payment,  loop):
     assert len(processor.list_command_obligations()) == 0
 
 
-def test_process_command_success_no_proc(payment, loop):
-    store = StorableFactory({})
+def test_process_command_success_no_proc(db, payment, loop):
+    store = StorableFactory(db, )
 
     my_addr = LibraAddress.from_bytes(b'B'*16)
     other_addr = LibraAddress.from_bytes(b'A'*16)
@@ -366,8 +366,8 @@ def test_process_command_success_no_proc(payment, loop):
     coro = processor.process_command_success_async(other_addr, cmd, seq=10)
     _ = loop.run_until_complete(coro)
 
-def test_process_command_success_vanilla(payment, loop):
-    store = StorableFactory({})
+def test_process_command_success_vanilla(db, payment, loop):
+    store = StorableFactory(db)
 
     my_addr = LibraAddress.from_bytes(b'B'*16)
     other_addr = LibraAddress.from_bytes(b'A'*16)

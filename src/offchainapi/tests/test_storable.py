@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Tests for the storage framework
-from ..storage import StorableDict, StorableValue, StorableFactory
+from ..storage import StorableDict, StorableValue, StorableFactory, BasicStore
 from ..payment_logic import PaymentCommand
 from ..protocol_messages import make_success_response, CommandRequestObject, \
     make_command_error
@@ -10,7 +10,11 @@ from ..errors import OffChainErrorCode
 
 import pytest
 
-def test_dict(db):
+def test_dict_basic():
+
+    db = BasicStore.mem()
+    db.can_write = True
+
     D = StorableDict(db, 'mary', int)
     assert D.is_empty()
     D['x'] = 10
@@ -28,7 +32,9 @@ def test_dict(db):
 
 
 def test_dict_dict():
-    db = {}
+    db = BasicStore.mem()
+    db.can_write = True
+
     D = StorableDict(db, 'mary', int)
     assert list(D.keys()) == []
 
@@ -56,7 +62,9 @@ def test_dict_dict():
     assert set(D.values()) == {20, 30, 40}
 
 def test_dict_dict_del_to_empty():
-    db = {}
+    db = BasicStore.mem()
+    db.can_write = True
+
     D = StorableDict(db, 'to_del', bool)
     D['x'] = True
     del D['x']
@@ -66,7 +74,9 @@ def test_dict_dict_del_to_empty():
 
 
 def test_dict_index():
-    db = {}
+    db = BasicStore.mem()
+    db.can_write = True
+
     D = StorableDict(db, 'mary', int)
     D['x'] = 10
     assert D['x'] == 10
@@ -80,8 +90,11 @@ def test_dict_index():
     assert 'x' not in D
 
 
-def test_value(db):
+def test_value():
     # Test default
+    db = BasicStore.mem()
+    db.can_write = True
+
     val0 = StorableValue(db, 'counter_zero', int, default=0)
     assert val0.get_value() == 0
     assert val0.exists()
@@ -99,7 +112,9 @@ def test_value(db):
 
 
 def test_value_dict():
-    db = {}
+    db = BasicStore.mem()
+    db.can_write = True
+
     val = StorableValue(db, 'counter', int)
     assert val.exists() is False
     val.set_value(10)
@@ -110,7 +125,10 @@ def test_value_dict():
     assert val2.get_value() == 10
 
 
-def test_hierarchy(db):
+def test_hierarchy():
+    db = BasicStore.mem()
+    db.can_write = True
+
     val = StorableValue(db, 'counter', int)
     val.set_value(10)
 
@@ -122,6 +140,7 @@ def test_hierarchy(db):
 
 
 def test_value_payment(db, payment):
+    db.can_write = True
     val = StorableValue(db, 'payment', payment.__class__)
     assert val.exists() is False
     val.set_value(payment)
@@ -135,6 +154,7 @@ def test_value_payment(db, payment):
 
 
 def test_value_command(db, payment):
+    db.can_write = True
 
     cmd = PaymentCommand(payment)
 
@@ -149,6 +169,7 @@ def test_value_command(db, payment):
 
 
 def test_value_request(db, payment):
+    db.can_write = True
     cmd = CommandRequestObject(PaymentCommand(payment))
     cmd.cid = '10'
 
@@ -169,67 +190,10 @@ def test_value_request(db, payment):
     val.set_value(cmd)
     assert val.get_value() == cmd
 
-
-def test_recovery():
-
-    class CrashNow(Exception):
-        pass
-
-    # Define an underlying storage that crashes
-    class CrashDict(dict):
-
-        def __init__(self, *args, **kwargs):
-            dict.__init__(self, *args, **kwargs)
-            self.crash = None
-
-        def __setitem__(self, key, value):
-            if self.crash is not None:
-                self.crash -= 1
-                if self.crash == 0:
-                    self.crash = None
-                    raise CrashNow()
-            dict.__setitem__(self, key, value)
-
-    # Test the crashing dict itself.
-    cd = CrashDict()
-    cd.crash = 2
-
-    cd['A'] = 1
-    with pytest.raises(CrashNow):
-        cd['B'] = 2
-
-    cd2 = CrashDict()
-    assert cd2.crash is None
-    sf = StorableFactory(cd2)
-
-    with sf as tx_id:
-        sf["1"] = 1
-        assert "1" in sf.cache
-        sf["2"] = 2
-        assert "2" in sf.cache
-        sf["4"] = 4
-
-    assert sf.cache == {}
-    assert cd2 == {"1": 1, "2": 2, '4': 4}
-    sf.__enter__()
-    sf["1"] = 10
-    assert "1" in sf.cache
-    sf["3"] = 30
-    assert "3" in sf.cache
-    del sf['4']
-
-    cd2.crash = 3
-    with pytest.raises(CrashNow):
-        sf.persist_cache()
-    assert '__backup_recovery' in cd2
-
-    sf2 = StorableFactory(cd2)
-    assert '__backup_recovery' not in cd2
-    assert cd2 == {"1":1, "2":2, '4':4}
-
 def test_dict_trans():
-    d = {}
-    store = StorableFactory(d)
+    db = BasicStore.mem()
+    db.can_write = True
+    store = StorableFactory(db)
 
     with store as _:
         eg = store.make_dict('eg', int, None)
@@ -247,3 +211,65 @@ def test_dict_trans():
 
     assert len(list(eg.keys())) == 3
     assert set(eg.keys()) == set(['x', 'y', 'z'])
+
+def test_sqlstore():
+    import sqlite3
+
+    db = sqlite3.connect(':memory:')
+
+
+    b = BasicStore(db)
+
+    # Can open twice?
+    b = BasicStore(db)
+
+    # Check mem constructor
+    b = BasicStore.mem()
+    b.can_write = True
+
+    with pytest.raises(KeyError):
+        b.get('n0', 'k0')
+
+    # Insert some values
+    b.put('n0', 'k0', 'v0')
+    assert b.get('n0', 'k0') == 'v0'
+
+    # Ensure values change
+    b.put('n0', 'k0', 'v1')
+    assert b.get('n0', 'k0') == 'v1'
+
+    # check isin operator
+    assert b.isin('n0', 'k0') is True
+    assert b.isin('n0', 'k1') is False
+
+    # Check delete
+    b.delete('n0', 'k0')
+    with pytest.raises(KeyError):
+        b.get('n0', 'k0')
+
+    with pytest.raises(KeyError):
+        b.delete('n0', 'k0')
+
+    # Check iterators
+    b.put('n1', 'k0', 'v0')
+    b.put('n1', 'k1', 'v0')
+    b.put('n1', 'k2', 'v0')
+
+    assert set(b.getkeys('n1')) == {'k0', 'k1', 'k2'}
+    assert set(b.getkeys('nx')) == set()
+
+    # Test count
+    assert b.count('n1') == 3
+    assert b.count('nx') == 0
+
+    # Test transactions
+    b.put('n2', 'k0', 'v0')
+    assert b.isin('n2', 'k0')
+
+    b.end_transaction(commit=False)
+    assert not b.isin('n2', 'k0')
+
+    b.put('n2', 'k0', 'v0')
+    b.end_transaction(commit=True)
+    b.end_transaction(commit=False)
+    assert b.isin('n2', 'k0')

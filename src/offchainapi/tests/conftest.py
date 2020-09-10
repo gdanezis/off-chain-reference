@@ -3,7 +3,7 @@
 
 from ..payment import PaymentActor, PaymentAction, PaymentObject, KYCData, StatusObject
 from ..business import BusinessContext, VASPInfo
-from ..storage import StorableFactory
+from ..storage import StorableFactory, BasicStore
 from ..payment_logic import Status, PaymentProcessor, PaymentCommand
 from ..protocol import OffChainVASP, VASPPairChannel
 from ..command_processor import CommandProcessor
@@ -65,8 +65,8 @@ def kyc_data():
 
 
 @pytest.fixture
-def store():
-    return StorableFactory({})
+def store(db):
+    return StorableFactory(db)
 
 
 @pytest.fixture
@@ -113,9 +113,11 @@ def two_channels(three_addresses, vasp, store):
 
 @pytest.fixture
 def db(tmp_path):
+    import sqlite3
+
     db_path = tmp_path / 'db.dat'
-    with dbm.open(str(db_path), 'c') as xdb:
-        yield xdb
+    db = BasicStore(sqlite3.connect(str(db_path)))
+    yield db
 
 
 @pytest.fixture
