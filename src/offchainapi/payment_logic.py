@@ -60,12 +60,12 @@ class PaymentProcessor(CommandProcessor):
 
         root = storage_factory.make_dir('processor')
         self.reference_id_index = storage_factory.make_dict(
-            'reference_id_index', PaymentObject, root)
+            'reference_id_index', str, root)
 
         # This is the primary store of shared objects.
         # It maps version numbers -> objects.
         self.object_store = storage_factory.make_dict(
-            'object_store', SharedObject, root=root)
+            'object_store', PaymentObject, root=root)
 
         # Persist those to enable crash-recovery
         self.pending_commands = storage_factory.make_dict(
@@ -244,7 +244,14 @@ class PaymentProcessor(CommandProcessor):
                                 other_address_str, seq)
 
                     # Attempt to send it to the other VASP.
-                    await self.net.send_request(other_address, request)
+                    try:
+                        await self.net.send_request(other_address, request)
+                    except NetworkException as e:
+                        # The command will be retransmitted
+                        logger.warning(
+                            f'(other:{other_address_str}) Network error: seq #{seq}: {e}'
+                        )
+
                 else:
                     # Signal to anyone waiting that progress was not made
                     # despite being our turn to make progress. As a result
@@ -270,10 +277,6 @@ class PaymentProcessor(CommandProcessor):
                 if self.obligation_exists(other_address_str, seq):
                     self.release_command_obligation(other_address_str, seq)
 
-        except NetworkException as e:
-            logger.warning(
-                f'(other:{other_address_str}) Network error: seq #{seq}: {e}'
-            )
         except Exception as e:
             logger.error(
                 f'(other:{other_address_str}) '
@@ -451,7 +454,8 @@ class PaymentProcessor(CommandProcessor):
         ''' Returns the latest payment version with
             the reference ID provided.'''
         if ref_id in self.reference_id_index:
-            return self.reference_id_index[ref_id]
+            version = self.reference_id_index[ref_id]
+            return self.object_store[version]
         else:
             raise KeyError(ref_id)
 
@@ -478,15 +482,15 @@ class PaymentProcessor(CommandProcessor):
         # reference ID to support they GetPaymentAPI.
         if ref_id in self.reference_id_index:
             # We get the dependencies of the old payment.
-            old_version = self.reference_id_index[ref_id].get_version()
+            old_version = self.get_latest_payment_by_ref_id(ref_id).get_version()
 
             # We check that the previous version is present.
             # If so we update it with the new one.
             dependencies_versions = command.get_dependencies()
             if old_version in dependencies_versions:
-                self.reference_id_index[ref_id] = payment
+                self.reference_id_index[ref_id] = payment.get_version()
         else:
-            self.reference_id_index[ref_id] = payment
+            self.reference_id_index[ref_id] = payment.get_version()
 
     # ----------- END of CommandProcessor interface ---------
 
